@@ -23,6 +23,34 @@
    - API 定義和用途
    - 異常處理機制
 
+## 前置條件
+
+### 環境要求
+- Python 3.8 或更高版本
+- 本地運行的 Qwen 2.5-32B LLM 服務
+- 穩定的網絡連接
+
+### Python 依賴安裝
+```bash
+pip install requests datetime argparse typing
+```
+
+### LLM 服務配置
+1. 確保本地 LLM 服務正在運行
+2. 修改腳本中的配置（如需要）：
+```python
+LLM_URL = "http://192.168.6.176:1234/v1"  # 改為你的 LLM 服務地址
+MODEL_NAME = "qwen2.5-32b-instruct-mlx"    # 使用的模型名稱
+```
+
+### 目錄結構準備
+```bash
+your-project/
+  ├── send_swift_to_llm.py    # 本工具腳本
+  ├── AppDocs/                # 將自動創建的文檔目錄
+  └── your-swift-project/     # Swift 源碼目錄
+```
+
 ## 使用方法
 
 ### 基本用法
@@ -38,67 +66,58 @@ python send_swift_to_llm.py <Swift專案目錄路徑>
 3. 生成優化後的 Markdown 文檔
 4. 自動分類並保存到對應目錄
 
-## 文檔使用指南
-
-### 文檔結構導航
-
-1. AppDocs 目錄結構
-   - Views/：UI 組件文檔
-   - ViewModels/：視圖邏輯文檔
-   - Models/：數據模型文檔
-   - Services/：服務層文檔
-   - Others/：通用組件文檔
-
-2. 文檔內容組織
-   - 基本信息（文件名、生成時間、組件類型）
-   - 組件定位（職責、協議）
-   - 數據與依賴關係
-   - API 定義與使用說明
-   - 邏輯流程說明
-
 ## 開發最佳實踐
 
-### 需求分析流程
+### 1. 使用 .clinerules 規範開發
+
+強烈建議在專案根目錄中創建 .clinerules 文件，這是確保團隊高效協作的關鍵。你可以：
+
+1. 從本文檔底部複製 .clinerules 模板
+2. 保存到你的專案根目錄
+3. 根據實際需要調整內容
+
+.clinerules 將幫助你：
+- 標準化與 LLM 的互動方式
+- 提供清晰的文檔使用指南
+- 確保團隊遵循一致的開發流程
+- 優化代碼覆用和協作效率
+
+### 2. 文檔驅動開發
+
+在有了 .clinerules 的指導後，按照以下順序進行開發：
 
 1. 理解現有組件
-
    ```bash
-   # 1. 瀏覽數據模型
-   AppDocs/Models/
-
-   # 2. 了解服務層
-   AppDocs/Services/
-
-   # 3. 查看視圖組件
-   AppDocs/Views/
-
-   # 4. 分析業務邏輯
-   AppDocs/ViewModels/
+   # 按 .clinerules 建議的順序瀏覽文檔：
+   AppDocs/Models/      # 1. 了解數據結構
+   AppDocs/Services/    # 2. 查看可用服務
+   AppDocs/ViewModels/  # 3. 分析業務邏輯
+   AppDocs/Views/       # 4. 參考 UI 實現
    ```
 
 2. 開發新功能示例
-
    ```bash
-   # 正確示範
+   # 遵循 .clinerules 的最佳實踐：
    "這是我們的訂單相關實現：
    {Models/OrderEntity.swift.md}
    {Services/OrderService.swift.md}
    
-   需求：實現訂單詳情頁面，展示訂單基本信息和狀態"
+   需求：實現訂單詳情頁面，展示訂單的基本信息和狀態"
    ```
 
 3. 修改現有功能示例
-
    ```bash
-   # 正確示範
-   "當前實現：
+   # 按照 .clinerules 定義的方式：
+   "這是當前的訂單列表實現：
    {ViewModels/OrderListViewModel.swift.md}
    {Views/OrderListView.swift.md}
    
    需求：增加按訂單時間排序功能"
    ```
 
-### 與 LLM 互動最佳實踐
+### 3. LLM 互動策略
+
+基於 .clinerules 的規範：
 
 1. 提供完整上下文
    - 相關組件的文檔內容
@@ -265,4 +284,3 @@ AppDocs 目錄組織了不同類型的組件文檔
 分享類似問題的解決方案
 說明現有的測試覆蓋情況
 討論潛在的性能影響
-```
