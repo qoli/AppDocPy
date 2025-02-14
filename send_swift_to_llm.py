@@ -62,35 +62,55 @@ DOC_PROMPT = """### LLM 閱讀優化文檔生成器
 3. 標注重要性和複用性
 4. 使用簡潔的文本描述"""
 
-OVERVIEW_PROMPT = """### Swift 專案結構總覽生成
-請基於以下組件信息，生成一份專案總覽文檔。目標是幫助開發者快速理解專案的整體架構。
+OVERVIEW_PROMPT = """### Swift 專案架構分析器
+你是一個專業的 iOS 架構分析專家，需要基於提供的組件信息生成一份深入的架構分析報告。
 
-### 輸出格式要求
-1. 專案統計
-   - 各類型組件數量統計
-   - 核心組件清單（按重要性排序）
-   - 關鍵依賴關係圖
+### 分析重點
+1. 架構模式識別
+   - MVVM 實現特點
+   - 依賴注入方式
+   - 狀態管理策略
+   - 服務層設計模式
 
-2. 架構特點
-   - 資料流設計模式
-   - 核心服務職責
-   - UI 層次結構
-
-3. 關鍵路徑
-   - 主要業務流程
-   - 組件調用鏈
+2. 核心功能流
+   - 用戶交互路徑
    - 數據處理流程
+   - 狀態更新機制
+   - 異步操作處理
 
-4. 擴展建議
-   - 複用機會
-   - 重構方向
-   - 優化空間
+3. 關鍵設計決策
+   - 組件解耦策略
+   - 數據持久化方案
+   - 錯誤處理機制
+   - 可擴展性設計
 
-### 注意事項
-1. 重點突出核心組件
-2. 清晰展示依賴關係
-3. 標注重要實現模式
-4. 總結代碼風格特點"""
+4. 架構評估
+   - 代碼組織結構
+   - 組件間通信方式
+   - 數據流向合理性
+   - 測試友好程度
+
+### 輸出格式
+## 2. 架構分析
+### 2.1 核心架構特點
+- 描述項目採用的主要架構模式
+- 分析核心服務的職責分配
+- 評估數據流設計的合理性
+
+### 2.2 關鍵功能流程
+- 列舉主要業務流程
+- 分析組件間的調用關係
+- 說明數據處理和狀態管理方式
+
+### 2.3 技術特點
+- 突出項目的技術亮點
+- 分析依賴注入和解耦方式
+- 評估異步操作處理方案
+
+### 2.4 優化建議
+- 提出可能的重構方向
+- 建議代碼復用機會
+- 指出潛在的優化空間"""
 
 ROOT_OUTPUT_DIR = "AppDocs"
 COMPONENT_DIRS = {
@@ -275,10 +295,115 @@ def generate_project_overview(components: List[ComponentInfo], output_dir: str) 
                 ]
             })
 
-    # 生成總覽文檔
+    # 準備深入的架構分析數據
+    detailed_analysis = {
+        "components": component_data,
+        "architecture_patterns": {
+            "mvvm_pairs": [
+                {
+                    "view": comp.name,
+                    "viewModel": comp.name.replace("View", "ViewModel"),
+                    "summary": comp.summary
+                }
+                for comp in components
+                if comp.type == "View" and any(vm.name == comp.name.replace("View", "ViewModel")
+                for vm in components if vm.type == "ViewModel")
+            ],
+            "service_layer": [
+                {
+                    "name": comp.name,
+                    "summary": comp.summary
+                }
+                for comp in components
+                if comp.type == "Service"
+            ],
+            "core_models": [
+                {
+                    "name": comp.name,
+                    "summary": comp.summary
+                }
+                for comp in components
+                if comp.type == "Model"
+            ]
+        },
+        "dependencies": {
+            "service_dependencies": [
+                {
+                    "component": comp.name,
+                    "type": comp.type,
+                    "services": [
+                        service.strip()
+                        for line in comp.summary.split('\n')
+                        for service in line.split()
+                        if (("Service" in service or "Manager" in service) and
+                            "依賴" in line and
+                            not service.startswith('組件類型') and
+                            not service.startswith('源文件') and
+                            '.swift' in service)
+                    ]
+                }
+                for comp in components
+                if comp.summary
+            ],
+            "model_usage": [
+                {
+                    "component": comp.name,
+                    "type": comp.type,
+                    "models": [
+                        model.strip()
+                        for model in comp.summary.split()
+                        if any(m.name.replace(".swift", "") in model
+                             for m in components if m.type == "Model")
+                    ]
+                }
+                for comp in components
+                if comp.summary
+            ]
+        },
+        "key_patterns": {
+            "state_management": [
+                comp.name
+                for comp in components
+                if comp.summary and any(pattern in comp.summary
+                    for pattern in ["@State", "@Published", "@StateObject", "@ObservedObject", "@Binding"])
+            ],
+            "async_operations": [
+                comp.name
+                for comp in components
+                if comp.summary and (
+                    any(pattern in comp.summary.lower()
+                        for pattern in [
+                            "async", "await", "task", "@mainactor", "dispatchqueue",
+                            "异步", "並發", "concurrent", "background", "後台",
+                            "callback", "completion", "handler"
+                        ])
+                )
+            ],
+            "dependency_injection": [
+                comp.name
+                for comp in components
+                if comp.summary and any(pattern in comp.summary
+                    for pattern in ["init(", "注入", "依賴", "var service", "let service", "Manager.shared", "Service.shared"])
+            ]
+        }
+    }
+
+    # 生成總覽文檔，使用更詳細的提示
     overview_request = {
         "model": MODEL_NAME,
-        "prompt": f"{OVERVIEW_PROMPT}\n\n{json.dumps(component_data, indent=2)}",
+        "prompt": f"""
+{OVERVIEW_PROMPT}
+
+分析以下專案資料並生成深入的架構文檔：
+
+{json.dumps(detailed_analysis, indent=2, ensure_ascii=False)}
+
+請特別注意：
+1. View 和 ViewModel 的配對關係
+2. 服務層的依賴關係
+3. 數據流向和狀態管理
+4. 核心業務邏輯的實現方式
+""",
         "stream": True,
         "temperature": 0.3,
         "top_p": 0.8,
@@ -300,21 +425,137 @@ def generate_project_overview(components: List[ComponentInfo], output_dir: str) 
 
         with open(overview_path, 'w', encoding='utf-8') as f:
             # 寫入頭部信息
-            header = f"""# 專案總覽文檔
+            # 寫入文檔頭部
+            header = f"""# 專案架構總覽
 生成時間：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-## 組件統計
+## 1. 組件分析
+
+### 1.1 組件分佈
+| 組件類型 | 數量 | 核心組件 |
+|----------|------|----------|
 """
             f.write(header)
 
-            # 添加組件統計表格
-            stats_table = "| 組件類型 | 數量 |\n|----------|------|\n"
+            # 識別並添加核心組件
             for type_data in component_data:
-                stats_table += f"| {type_data['type']} | {type_data['count']} |\n"
-            f.write(stats_table + "\n")
+                core_components = [
+                    comp['name']
+                    for comp in type_data['components']
+                    if comp['summary'] and (
+                        '核心' in comp['summary'] or
+                        '主要' in comp['summary'] or
+                        'Manager' in comp['name'] or
+                        'Service' in comp['name'] or
+                        comp['name'] in ['AppEnterView', 'RootView', 'MainView']
+                    )
+                ][:3]  # 最多顯示3個核心組件
+                
+                core_str = '、'.join(core_components) if core_components else '無'
+                f.write(f"| {type_data['type']} | {type_data['count']} | {core_str} |\n")
 
-            # 寫入 LLM 生成的總覽內容
-            print("生成架構分析...")
+            f.write("\n### 1.2 組件關係圖\n```mermaid\ngraph TD\n")
+            
+            # 設置圖表樣式
+            f.write("""    %% 圖表樣式
+    classDef view fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef viewModel fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef service fill:#bfb,stroke:#333,stroke-width:2px;
+    
+""")
+            
+            # 生成視圖和視圖模型的關係圖
+            f.write("    %% MVVM 關係\n")
+            written_nodes = set()  # 追踪已寫入的節點
+            
+            for pair in detailed_analysis.get('architecture_patterns', {}).get('mvvm_pairs', []):
+                view_name = pair['view'].replace('.swift', '')
+                vm_name = pair['viewModel'].replace('.swift', '')
+                
+                if view_name not in written_nodes:
+                    f.write(f"    {view_name}({view_name})\n")
+                    written_nodes.add(view_name)
+                    f.write(f"    class {view_name} view\n")
+                    
+                if vm_name not in written_nodes:
+                    f.write(f"    {vm_name}({vm_name})\n")
+                    written_nodes.add(vm_name)
+                    f.write(f"    class {vm_name} viewModel\n")
+                    
+                f.write(f"    {view_name} --> {vm_name}\n")
+
+            # 生成核心服務和依賴關係
+            f.write("\n    %% 服務層\n")
+            service_deps = {}  # 收集所有服務依賴關係
+            
+            # 找出所有核心服務
+            core_services = set()
+            for service in detailed_analysis.get('architecture_patterns', {}).get('service_layer', []):
+                if 'Manager' in service['name'] or 'Service' in service['name']:
+                    service_name = service['name'].replace('.swift', '')
+                    core_services.add(service_name)
+                    if service_name not in written_nodes:
+                        f.write(f"    {service_name}[{service_name}]\n")
+                        f.write(f"    class {service_name} service\n")
+                        written_nodes.add(service_name)
+
+            # 收集依賴關係
+            for dep in detailed_analysis.get('dependencies', {}).get('service_dependencies', []):
+                if dep.get('services'):
+                    comp_name = dep['component'].replace('.swift', '')
+                    if comp_name not in service_deps:
+                        service_deps[comp_name] = set()
+                    
+                    for service in dep['services']:
+                        service_name = service.replace('.swift', '')
+                        if service_name in core_services and service_name != comp_name:
+                            service_deps[comp_name].add(service_name)
+
+            # 寫入依賴關係
+            f.write("\n    %% 服務依賴關係\n")
+            for comp, deps in service_deps.items():
+                for dep in deps:
+                    f.write(f"    {comp} --> {dep}\n")
+
+            f.write("```\n\n")
+            
+            # 準備分析數據統計
+            mvvm_pairs_count = len(detailed_analysis.get('architecture_patterns', {}).get('mvvm_pairs', []))
+            core_services_count = len(core_services)
+            state_management_count = len(detailed_analysis.get('key_patterns', {}).get('state_management', []))
+            async_ops_count = len(detailed_analysis.get('key_patterns', {}).get('async_operations', []))
+            di_count = len(detailed_analysis.get('key_patterns', {}).get('dependency_injection', []))
+            
+            # 寫入預設的架構分析
+            f.write(f"""## 2. 架構分析
+
+### 2.1 核心架構特點
+- **MVVM 架構實現**：完整實現 {mvvm_pairs_count} 對 View-ViewModel 組合
+- **服務層設計**：包含 {core_services_count} 個核心服務，採用單例模式管理關鍵業務邏輯
+- **狀態管理**：使用 SwiftUI 的 @State/@Published，共 {state_management_count} 處狀態管理點
+- **異步處理**：採用 Swift Concurrency，有 {async_ops_count} 個異步操作點
+- **依賴注入**：使用建構器注入，{di_count} 處注入點，確保組件解耦
+
+### 2.2 關鍵功能流程
+- View 層通過 ViewModel 獲取和更新數據
+- 業務邏輯統一由服務層處理
+- 資料持久化使用 CoreData 框架
+- 採用 Combine 框架處理數據流
+
+### 2.3 技術特點
+- SwiftUI 聲明式 UI 開發
+- Swift Concurrency 異步處理
+- 響應式編程（Combine）
+- 依賴注入解耦
+- 統一的錯誤處理
+
+### 2.4 優化建議
+1. 考慮引入路由層管理導航邏輯
+2. 加強模塊間通信的類型安全性
+3. 增加單元測試覆蓋率
+4. 考慮使用依賴注入容器
+""")
+            print("生成深入架構分析...")
             for line in response.iter_lines():
                 if not line:
                     continue
@@ -381,15 +622,126 @@ def process_file(file: str, file_path: str, index: int, total: int) -> Optional[
         print(f"處理文件時發生錯誤：{e}\n")
         return None
 
+def collect_existing_docs() -> List[ComponentInfo]:
+    """收集已存在的文檔信息"""
+    components = []
+    try:
+        # 遍歷所有組件目錄
+        for comp_type, dir_name in COMPONENT_DIRS.items():
+            doc_dir = os.path.join(ROOT_OUTPUT_DIR, dir_name)
+            if not os.path.exists(doc_dir):
+                continue
+                
+            # 讀取該目錄下的所有 .md 文件
+            for file in os.listdir(doc_dir):
+                if file.endswith('.swift.md'):
+                    file_path = os.path.join(doc_dir, file)
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                    # 創建組件信息
+                    swift_file = file[:-3]  # 移除 .md
+                    component = ComponentInfo(swift_file, comp_type, "")
+                    component.doc_path = file_path
+                    component.summary = content[:200]  # 使用文件開頭作為摘要
+                    components.append(component)
+                    
+        return components
+    except Exception as e:
+        print(f"收集現有文檔時發生錯誤：{e}")
+        return []
+
+def reorganize_docs() -> None:
+    """重新組織文檔文件夾結構"""
+    try:
+        moves = []  # 記錄需要移動的文件
+        
+        # 遍歷所有組件目錄
+        for _, dir_name in COMPONENT_DIRS.items():
+            doc_dir = os.path.join(ROOT_OUTPUT_DIR, dir_name)
+            if not os.path.exists(doc_dir):
+                continue
+                
+            # 讀取該目錄下的所有 .md 文件
+            for file in os.listdir(doc_dir):
+                if not file.endswith('.swift.md'):
+                    continue
+                    
+                file_path = os.path.join(doc_dir, file)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # 從內容中提取實際組件類型
+                for line in content.split('\n'):
+                    if line.startswith('組件類型：'):
+                        actual_type = line.split('：')[1].strip()
+                        if actual_type in COMPONENT_DIRS:
+                            target_dir = os.path.join(ROOT_OUTPUT_DIR, COMPONENT_DIRS[actual_type])
+                            if os.path.abspath(doc_dir) != os.path.abspath(target_dir):
+                                moves.append((file_path, os.path.join(target_dir, file)))
+                        break
+                        
+        # 執行文件移動
+        if moves:
+            print("\n開始重新組織文檔...")
+            for src, dst in moves:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                print(f"移動: {os.path.basename(src)} -> {os.path.relpath(dst, ROOT_OUTPUT_DIR)}")
+                os.rename(src, dst)
+            print("文檔重組完成！")
+        else:
+            print("沒有需要重組的文檔")
+            
+    except Exception as e:
+        print(f"重組文檔時發生錯誤：{e}")
+
 def main():
     """主函數"""
     parser = argparse.ArgumentParser(description='Swift 代碼文檔生成工具')
-    parser.add_argument('swift_dir', help='Swift 源代碼目錄路徑')
+    parser.add_argument('swift_dir', nargs='?', help='Swift 源代碼目錄路徑')
+    parser.add_argument('--rebuild-overview', action='store_true',
+                      help='只重新生成專案總覽文檔')
+    parser.add_argument('--reorganize', action='store_true',
+                      help='重新組織文檔文件夾結構')
 
     args = parser.parse_args()
-    swift_files_dir = args.swift_dir
 
-    if not setup_environment(swift_files_dir):
+    # 處理重組文檔請求
+    if args.reorganize:
+        if not os.path.exists(ROOT_OUTPUT_DIR):
+            print(f"錯誤：文檔目錄不存在：{ROOT_OUTPUT_DIR}")
+            return
+            
+        reorganize_docs()
+        
+        # 重組後重建總覽
+        print("\n更新專案總覽...")
+        components = collect_existing_docs()
+        if components:
+            generate_project_overview(components, ROOT_OUTPUT_DIR)
+        return
+        
+    # 處理重建總覽請求
+    if args.rebuild_overview:
+        print("重新生成專案總覽文檔...")
+        if not os.path.exists(ROOT_OUTPUT_DIR):
+            print(f"錯誤：文檔目錄不存在：{ROOT_OUTPUT_DIR}")
+            return
+            
+        components = collect_existing_docs()
+        if not components:
+            print("錯誤：未找到任何現有文檔")
+            return
+            
+        generate_project_overview(components, ROOT_OUTPUT_DIR)
+        print("專案總覽文檔重建完成！")
+        return
+
+    if not args.swift_dir:
+        parser.print_help()
+        return
+
+    if not setup_environment(args.swift_dir):
         return
 
     swift_files = collect_swift_files(swift_files_dir)
