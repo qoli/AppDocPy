@@ -272,28 +272,42 @@ def generate_documentation(swift_code: str, output_file_path: str, component_typ
 
 def generate_project_overview(components: List[ComponentInfo], output_dir: str) -> None:
     """生成專案總覽文檔"""
-    # 按類型分類組件
+    # 按目錄結構統計組件
     components_by_type: Dict[str, List[ComponentInfo]] = {
         type_name: [] for type_name in COMPONENT_DIRS
     }
-    for component in components:
-        components_by_type[component.type].append(component)
+    
+    for type_name, dir_name in COMPONENT_DIRS.items():
+        dir_path = os.path.join(ROOT_OUTPUT_DIR, dir_name)
+        if os.path.exists(dir_path):
+            for file in os.listdir(dir_path):
+                if file.endswith('.swift.md'):
+                    # 從實際文件讀取組件信息
+                    file_path = os.path.join(dir_path, file)
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    swift_file = file[:-3]  # 移除 .md
+                    component = ComponentInfo(swift_file, type_name, "")
+                    component.doc_path = file_path
+                    component.summary = content[:200]
+                    components_by_type[type_name].append(component)
 
     # 準備概覽數據
-    component_data = []
-    for type_name, type_components in components_by_type.items():
-        if type_components:
-            component_data.append({
-                "type": type_name,
-                "count": len(type_components),
-                "components": [
-                    {
-                        "name": c.name,
-                        "summary": c.summary,
-                        "doc_path": c.doc_path
-                    } for c in type_components
-                ]
-            })
+    component_data = [
+        {
+            "type": type_name,
+            "count": len(type_components),
+            "components": [
+                {
+                    "name": c.name,
+                    "summary": c.summary,
+                    "doc_path": c.doc_path
+                } for c in type_components
+            ]
+        }
+        for type_name, type_components in components_by_type.items()
+        if type_components
+    ]
 
     # 準備深入的架構分析數據
     detailed_analysis = {
@@ -455,12 +469,34 @@ def generate_project_overview(components: List[ComponentInfo], output_dir: str) 
                 f.write(f"| {type_data['type']} | {type_data['count']} | {core_str} |\n")
 
             f.write("\n### 1.2 組件關係圖\n```mermaid\ngraph TD\n")
-            
             # 設置圖表樣式
             f.write("""    %% 圖表樣式
-    classDef view fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef viewModel fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef service fill:#bfb,stroke:#333,stroke-width:2px;
+            classDef view fill:#ffd7e8,stroke:#ff69b4,stroke-width:2px;
+            classDef viewModel fill:#b8d4ff,stroke:#4169e1,stroke-width:2px;
+            classDef service fill:#98fb98,stroke:#228b22,stroke-width:2px;
+            classDef model fill:#ffe4b5,stroke:#daa520,stroke-width:2px;
+            
+            %% 設置佈局方向
+            graph TB
+            
+            %% 子圖分組
+            subgraph UI Layer
+                direction TB
+                style UI Layer fill:#fff5f9,stroke:#ff69b4
+            end
+            
+            subgraph Business Layer
+                direction TB
+                style Business Layer fill:#f5f9ff,stroke:#4169e1
+            end
+            
+            subgraph Data Layer
+                direction TB
+                style Data Layer fill:#f0fff0,stroke:#228b22
+            end
+            
+            %% 設置組件關係
+            linkStyle default stroke:#666,stroke-width:1px;
     
 """)
             
@@ -468,25 +504,76 @@ def generate_project_overview(components: List[ComponentInfo], output_dir: str) 
             f.write("    %% MVVM 關係\n")
             written_nodes = set()  # 追踪已寫入的節點
             
-            for pair in detailed_analysis.get('architecture_patterns', {}).get('mvvm_pairs', []):
-                view_name = pair['view'].replace('.swift', '')
-                vm_name = pair['viewModel'].replace('.swift', '')
-                
-                if view_name not in written_nodes:
-                    f.write(f"    {view_name}({view_name})\n")
-                    written_nodes.add(view_name)
-                    f.write(f"    class {view_name} view\n")
+            # 從實際目錄結構獲取組件
+            views = []
+            viewmodels = []
+            services = []
+            models = []
+            
+            for type_name, dir_name in COMPONENT_DIRS.items():
+                dir_path = os.path.join(ROOT_OUTPUT_DIR, dir_name)
+                if not os.path.exists(dir_path):
+                    continue
                     
-                if vm_name not in written_nodes:
-                    f.write(f"    {vm_name}({vm_name})\n")
-                    written_nodes.add(vm_name)
-                    f.write(f"    class {vm_name} viewModel\n")
+                for file in os.listdir(dir_path):
+                    if file.endswith('.swift.md'):
+                        component = {
+                            'name': file[:-3],  # 移除 .md
+                            'path': os.path.join(dir_path, file)
+                        }
+                        if type_name == "View":
+                            views.append(component)
+                        elif type_name == "ViewModel":
+                            viewmodels.append(component)
+                        elif type_name == "Service":
+                            services.append(component)
+                        elif type_name == "Model":
+                            models.append(component)
+            
+            # 建立 View-ViewModel 關係
+            for view in views:
+                view_name = view['name'].replace('.swift', '')
+                if 'View' in view_name:
+                    vm_name = view_name.replace('View', 'ViewModel')
+                    matching_vm = next((vm for vm in viewmodels if vm['name'].startswith(vm_name)), None)
                     
-                f.write(f"    {view_name} --> {vm_name}\n")
-
+                    if matching_vm:
+                        # 寫入 View
+                        if view_name not in written_nodes:
+                            f.write(f"    {view_name}({view_name})\n")
+                            written_nodes.add(view_name)
+                            f.write(f"    class {view_name} view\n")
+                        
+                        # 寫入 ViewModel
+                        if vm_name not in written_nodes:
+                            f.write(f"    {vm_name}({vm_name})\n")
+                            written_nodes.add(vm_name)
+                            f.write(f"    class {vm_name} viewModel\n")
+                        
+                        f.write(f"    {view_name} --> {vm_name}\n")
+            
             # 生成核心服務和依賴關係
             f.write("\n    %% 服務層\n")
             service_deps = {}  # 收集所有服務依賴關係
+            
+            # 寫入服務組件
+            for service in services:
+                service_name = service['name'].replace('.swift', '')
+                if service_name not in written_nodes:
+                    f.write(f"    {service_name}[{service_name}]\n")
+                    f.write(f"    class {service_name} service\n")
+                    written_nodes.add(service_name)
+                    
+                # 分析服務依賴關係
+                if os.path.exists(service['path']):
+                    with open(service['path'], 'r', encoding='utf-8') as sf:
+                        content = sf.read()
+                        for other_service in services:
+                            other_name = other_service['name'].replace('.swift', '')
+                            if other_name != service_name and other_name in content:
+                                if service_name not in service_deps:
+                                    service_deps[service_name] = set()
+                                service_deps[service_name].add(other_name)
             
             # 找出所有核心服務
             core_services = set()
@@ -513,9 +600,43 @@ def generate_project_overview(components: List[ComponentInfo], output_dir: str) 
 
             # 寫入依賴關係
             f.write("\n    %% 服務依賴關係\n")
-            for comp, deps in service_deps.items():
+            for service_name, deps in service_deps.items():
                 for dep in deps:
-                    f.write(f"    {comp} --> {dep}\n")
+                    f.write(f"    {service_name} --> {dep}\n")
+            
+            # 添加模型層
+            f.write("\n    %% 模型層\n")
+            model_deps = {}  # 收集模型依賴關係
+            
+            # 寫入模型組件
+            for model in models:
+                model_name = model['name'].replace('.swift', '')
+                if model_name not in written_nodes:
+                    f.write(f"    {model_name}[{model_name}]\n")
+                    f.write(f"    class {model_name} model\n")
+                    written_nodes.add(model_name)
+            
+            # 分析模型的使用關係
+            for vm in viewmodels:
+                if os.path.exists(vm['path']):
+                    vm_name = vm['name'].replace('.swift', '')
+                    with open(vm['path'], 'r', encoding='utf-8') as vf:
+                        content = vf.read()
+                        for model in models:
+                            model_name = model['name'].replace('.swift', '')
+                            if model_name in content:
+                                f.write(f"    {vm_name} --> {model_name}\n")
+            
+            # 分析服務層對模型的使用
+            for service in services:
+                if os.path.exists(service['path']):
+                    service_name = service['name'].replace('.swift', '')
+                    with open(service['path'], 'r', encoding='utf-8') as sf:
+                        content = sf.read()
+                        for model in models:
+                            model_name = model['name'].replace('.swift', '')
+                            if model_name in content:
+                                f.write(f"    {service_name} --> {model_name}\n")
 
             f.write("```\n\n")
             
@@ -671,14 +792,61 @@ def reorganize_docs() -> None:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                     
-                # 從內容中提取實際組件類型
+                # 從詳細文檔中提取實際組件類型
+                actual_type = None
                 for line in content.split('\n'):
-                    if line.startswith('組件類型：'):
-                        actual_type = line.split('：')[1].strip()
+                    if "- **類型**:" in line:
+                        type_part = line.split("- **類型**:", 1)[1].strip()
+                        # 提取類型值（去除可能的額外描述）
+                        type_value = type_part.split()[0].strip()
+                        
+                        # 映射常見的類型表述到標準類型
+                        type_mapping = {
+                            # View 相关
+                            "View": "View",
+                            "視圖": "View",
+                            "UIComponent": "View",
+                            
+                            # ViewModel 相关
+                            "ViewModel": "ViewModel",
+                            "視圖模型": "ViewModel",
+                            
+                            # Model 相关
+                            "Model": "Model",
+                            "模型": "Model",
+                            "Entity": "Model",
+                            "實體": "Model",
+                            
+                            # Service 相关
+                            "Service": "Service",
+                            "服務": "Service",
+                            "Helper": "Service",
+                            "Helper Class": "Service",
+                            "Manager": "Service",
+                            "Utility": "Service",
+                            "工具類": "Service",
+                            "Configuration": "Service",
+                        }
+                        
+                        actual_type = type_mapping.get(type_value, "Other")
                         if actual_type in COMPONENT_DIRS:
                             target_dir = os.path.join(ROOT_OUTPUT_DIR, COMPONENT_DIRS[actual_type])
                             if os.path.abspath(doc_dir) != os.path.abspath(target_dir):
                                 moves.append((file_path, os.path.join(target_dir, file)))
+                                
+                                # 更新文件內容中的組件類型標記
+                                new_content = []
+                                header_updated = False
+                                for content_line in content.split('\n'):
+                                    if content_line.startswith('組件類型：') and not header_updated:
+                                        new_content.append(f'組件類型：{actual_type}')
+                                        header_updated = True
+                                    else:
+                                        new_content.append(content_line)
+                                        
+                                if header_updated:
+                                    with open(file_path, 'w', encoding='utf-8') as f:
+                                        f.write('\n'.join(new_content))
                         break
                         
         # 執行文件移動
@@ -744,7 +912,7 @@ def main():
     if not setup_environment(args.swift_dir):
         return
 
-    swift_files = collect_swift_files(swift_files_dir)
+    swift_files = collect_swift_files(args.swift_dir)
     if not swift_files:
         print("未找到任何 Swift 文件")
         return
