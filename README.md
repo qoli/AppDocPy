@@ -47,7 +47,7 @@ MODEL_NAME = "qwen2.5-32b-instruct-mlx"    # 使用的模型名稱
 ```bash
 your-project/
   ├── send_swift_to_llm.py    # 本工具腳本
-  ├── AppDocs/                # 將自動創建的文檔目錄
+  ├── AppDocs/                # 自動創建的文檔目錄（已從 git 倉庫中移除，但仍然保留在本地）
   └── your-swift-project/     # Swift 源碼目錄
 ```
 
@@ -58,6 +58,12 @@ your-project/
 ```bash
 python send_swift_to_llm.py <Swift專案目錄路徑>
 ```
+
+### 命令行參數
+
+- `swift_dir` (位置參數): Swift 源代碼目錄路徑。
+- `--rebuild-overview`: 只重新生成專案總覽文檔。
+- `--reorganize`: 重新組織文檔文件夾結構。
 
 ### 執行過程
 
@@ -72,6 +78,7 @@ python send_swift_to_llm.py <Swift專案目錄路徑>
 專案總覽文件（ProjectOverview.md）提供了整個專案的高層視圖，特別適合處理大型專案或需要快速了解專案結構的場景。
 
 #### 總覽文件內容
+
 1. 組件統計
    - 各類型組件的數量分佈
    - 一目了然的統計表格
@@ -92,6 +99,7 @@ python send_swift_to_llm.py <Swift專案目錄路徑>
    - 優化方向建議
 
 #### 最佳實踐
+
 1. 項目初期：
    ```bash
    # 生成初始文檔
@@ -190,7 +198,7 @@ python send_swift_to_llm.py <Swift專案目錄路徑>
 ## 技術細節
 
 - 使用 Qwen 2.5-32B 模型
-- 支持流式輸出
+- 支援流式輸出
 - 自動化的組件類型判斷
 - 結構化的文檔模板
 - 完善的錯誤處理
