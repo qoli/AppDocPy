@@ -7,7 +7,7 @@ import argparse
 from typing import Optional, Tuple, Dict, List
 
 # 配置
-LLM_URL = "http://192.168.6.176:1234/v1"
+LLM_URL = "http://192.168.6.237:1234/v1"
 MODEL_NAME = "qwen2.5-32b-instruct-mlx"
 
 TYPE_CHECK_PROMPT = """### Swift 代碼類型判斷
